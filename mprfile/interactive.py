@@ -69,10 +69,12 @@ class ROIFitter:
     # ------------------------------------------------------------------ data helpers
     @property
     def sample(self) -> SampleResult:
+        """The currently shown sample."""
         return self.samples[self.idx]
 
     @property
     def rois(self):
+        """ROIs (ROIResult objects) of the currently shown sample."""
         return self.state[self.idx]
 
     def _masses(self):
@@ -81,10 +83,12 @@ class ROIFitter:
 
     @property
     def resolution(self):
+        """Single-species width σ (kDa) from the calibration, used by the checks."""
         return self.sample.calibration.resolution_kDa
 
     @property
     def bin_width(self):
+        """Histogram bin width used for display (kDa)."""
         return self._bin_width or self.sample.settings.bin_width
 
     # ------------------------------------------------------------------ public API
@@ -110,6 +114,7 @@ class ROIFitter:
         return r
 
     def set_k(self, i: int, k: int):
+        """Change the number of Gaussians of ROI i and refit (reuses the model comparison)."""
         r = self.rois[i]
         if k == r.k:
             return
@@ -122,6 +127,7 @@ class ROIFitter:
         self._refresh()
 
     def remove_roi(self, i: int):
+        """Delete ROI number i (0-based, ROIs are sorted by mass)."""
         del self.rois[i]
         self._refresh()
 
@@ -222,6 +228,7 @@ class ROIFitter:
         display(self.ui)
 
     def show(self):
+        """Display the tool (same as leaving `fitter` as the last line of a cell)."""
         from IPython.display import display
         display(self.ui)
 

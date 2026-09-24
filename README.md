@@ -4,6 +4,10 @@
 
 From raw AcquireMP files to calibrated masses, peak tables and PDF reports, without DiscoverMP.
 
+📖 **Documentation: see the [project wiki](https://github.com/VBVerduijn/mprfile/wiki)**. It covers installation, a quick start, calibration, sample analysis, manual ROIs and overfitting statistics, the interactive tool, the command line, the file format and the full API reference.
+
+**No data at hand?** `python -c "from mprfile.demo import make_demo_files; make_demo_files('demo_data')"` writes simulated example files.
+
 ## Install (once)
 You need [Miniforge](https://conda-forge.org/download/) or Anaconda. In the *Miniforge/Anaconda Prompt*, from this folder:
 ```

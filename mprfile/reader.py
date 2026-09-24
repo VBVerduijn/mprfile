@@ -101,6 +101,7 @@ class MPRFile:
         self.close()
 
     def close(self):
+        """Close the underlying HDF5 file (also done by the `with` block)."""
         self._movie_cache = None
         if self.h5.id.valid:
             self.h5.close()
@@ -139,6 +140,7 @@ class MPRFile:
 
     @property
     def sample_info(self) -> dict:
+        """Sample name, buffer, pH, operator, comments and timestamp as entered in AcquireMP."""
         info = self.metadata("movie/measurement_info")
         info["comments"] = _decode_scalar(self.h5["movie/comments"][()])
         info["timestamp"] = _decode_scalar(self.h5["movie/timestamp"][()])
@@ -146,17 +148,21 @@ class MPRFile:
 
     @property
     def camera(self) -> dict:
+        """Acquisition camera settings: frame rate, frame/pixel binning, exposure, image size."""
         return self.metadata("movie/configuration/acq_camera")
 
     @property
     def instrument(self) -> dict:
+        """Instrument name and device serial numbers."""
         return self.metadata("movie/device_serials")
 
     @property
     def analysis_params(self) -> dict:
+        """Parameters AcquireMP used for its particle analysis (n_avg, thresholds, PSF model)."""
         return self.metadata("analysis/analysis_params")
 
     def summary(self) -> str:
+        """One-paragraph human-readable overview of the file."""
         s, cam, ins = self.sample_info, self.camera, self.instrument
         ev = self.h5["analysis/events/events_fitted/contrasts"].shape[0] \
             if "analysis/events/events_fitted" in self.h5 else 0
@@ -176,10 +182,12 @@ class MPRFile:
     # movie ----------------------------------------------------------------
     @property
     def n_frames(self) -> int:
+        """Number of stored (binned) frames."""
         return self.h5["movie/frame"].shape[0]
 
     @property
     def frame_shape(self) -> tuple[int, int]:
+        """(ny, nx) of one frame in pixels."""
         return tuple(self.h5["movie/frame"].shape[1:])
 
     @property
@@ -273,6 +281,7 @@ class MPRFile:
         return out
 
     def autofocus_image(self) -> np.ndarray:
+        """Image from the autofocus camera saved with the measurement."""
         return self.h5["movie/autofocus_image"][:]
 
     # analysis -------------------------------------------------------------
@@ -345,6 +354,7 @@ class MPRFile:
 
     # export ---------------------------------------------------------------
     def export_events_csv(self, path: str, **kw) -> str:
+        """Write events() to a CSV file; keyword arguments go to events() (e.g. calibration=cal)."""
         ev = self.events(**kw)
         cols = list(ev)
         data = np.column_stack([ev[c].astype(float) for c in cols])

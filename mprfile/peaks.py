@@ -49,10 +49,12 @@ class PeakFit:
 
     @property
     def centers(self):
+        """Histogram bin centres."""
         return 0.5 * (self.edges[1:] + self.edges[:-1])
 
     @property
     def bin_width(self):
+        """Histogram bin width."""
         return float(self.edges[1] - self.edges[0])
 
     def curve(self, x):

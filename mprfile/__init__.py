@@ -5,9 +5,11 @@ Reading:     MPRFile            (raw/ratiometric movies, events, metadata)
 Calibration: calibrate, Calibration, CALIBRANTS
 Analysis:    analyze, analyze_sample, AnalysisSettings
 Manual ROIs: mprfile.mixture (statistics), mprfile.interactive.ROIFitter (notebook tool)
+Demo data:   mprfile.demo.make_demo_files (simulated .mpr files)
+Docs:        https://github.com/VBVerduijn/mprfile/wiki
 Command:     mpr-analyze        (see `mpr-analyze --help`)
 """
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from .reader import MPRFile, load_events
 from .calibration import CALIBRANTS, Calibration, calibrate

@@ -90,6 +90,7 @@ class Calibration:
         return self.slope * np.asarray(contrast, float) + self.intercept
 
     def inverse(self, mass):
+        """Contrast corresponding to a mass (the inverse calibration)."""
         return (np.asarray(mass, float) - self.intercept) / self.slope
 
     @property
@@ -116,6 +117,7 @@ class Calibration:
         return f"Calibration(mass = {self.slope:.6g}·contrast {self.intercept:+.4g} {self.unit}{r2}){name}"
 
     def report(self) -> str:
+        """Text report: formula, calibrant peaks with residuals, ladder check, range, warnings."""
         lines = [repr(self)]
         if self.source:
             lines.append(f"Calibrant file: {self.source.get('file')}  ({self.source.get('timestamp')})")
@@ -132,6 +134,7 @@ class Calibration:
 
     # --- persistence -------------------------------------------------------
     def to_dict(self) -> dict:
+        """Plain-dict form of the calibration (what save() writes)."""
         d = {"slope": self.slope, "intercept": self.intercept, "unit": self.unit, "r2": self.r2,
              "calibrant": self.calibrant, "source": self.source, "warnings": self.warnings,
              "created": _dt.datetime.now().isoformat(timespec="seconds"),
@@ -142,12 +145,14 @@ class Calibration:
         return d
 
     def save(self, path) -> str:
+        """Save as JSON (formula, peaks, source file and settings) for reuse with later samples."""
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, default=str)
         return os.fspath(path)
 
     @classmethod
     def load(cls, path) -> "Calibration":
+        """Load a calibration saved with save() (a calibration.json from the results folder)."""
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
         return cls(slope=d["slope"], intercept=d["intercept"], unit=d.get("unit", "kDa"), r2=d.get("r2"),

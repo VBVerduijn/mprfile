@@ -35,3 +35,8 @@ results_*/
 
 # Tutorial outputs
 my_calibration.json
+
+# Demo data and the wiki (separate git repository)
+demo_data/
+wiki/
+wiki_demo/

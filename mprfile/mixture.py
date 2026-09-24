@@ -72,14 +72,17 @@ class MixtureFit:
 
     @property
     def n_params(self) -> int:
+        """Number of free parameters: 3k − 1 (+1 with a flat background)."""
         return 3 * self.k - 1 + int(self.has_background)
 
     @property
     def aic(self) -> float:
+        """Akaike information criterion, 2p − 2 ln L."""
         return 2 * self.n_params - 2 * self.loglik
 
     @property
     def bic(self) -> float:
+        """Bayesian information criterion, p ln n − 2 ln L (lower is better)."""
         return self.n_params * np.log(max(self.n, 1)) - 2 * self.loglik
 
     @property
@@ -118,6 +121,7 @@ class MixtureFit:
         return np.sum(comps, axis=0) + (bg if self.has_background else 0)
 
     def table(self) -> pd.DataFrame:
+        """Fitted components: mass, ± error, σ, share of the ROI's events, events."""
         df = pd.DataFrame({"mass_kDa": self.mu, "sigma_kDa": self.sigma, "weight": self.weights_in_roi,
                            "counts": self.counts})
         if self.mu_err is not None:
@@ -282,6 +286,7 @@ class ROIResult:
 
     @property
     def label(self) -> str:
+        """'lo–hi kDa'."""
         return f"{self.lo:.0f}–{self.hi:.0f} kDa"
 
     @property
@@ -293,6 +298,7 @@ class ROIResult:
         return "moderate" if self.warnings else "low"
 
     def components(self, n_total: int | None = None) -> pd.DataFrame:
+        """Component table with the ROI label, and percentages relative to n_total events if given."""
         df = self.fit.table()
         df.insert(0, "roi", self.label)
         if n_total:
@@ -303,9 +309,11 @@ class ROIResult:
         return df
 
     def spec(self) -> tuple:
+        """(lo, hi, k): the ROI definition to reproduce this fit via AnalysisSettings(rois=[...])."""
         return (round(self.lo, 1), round(self.hi, 1), self.k)
 
     def model_summary(self) -> str:
+        """One-line verdict: chosen k, BIC-preferred k and the evidence (ΔBIC)."""
         t = self.models.set_index("k")
         parts = [f"ROI {self.label}: {self.k} Gaussian(s)" + (" + flat background" if self.background else "")]
         if self.bic_best_k == self.k:

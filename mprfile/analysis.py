@@ -91,13 +91,16 @@ class SampleResult:
 
     @property
     def mode(self) -> str:
+        """'automatic' or 'manual ROIs'."""
         return "manual ROIs" if self.rois else "automatic"
 
     @property
     def name(self) -> str:
+        """File name without extension; used as the results sub-folder name."""
         return Path(self.file).stem
 
     def summary_rows(self) -> pd.DataFrame:
+        """This sample's rows for summary.csv (one per peak, with sample/file/date columns)."""
         cols = {"sample": self.info.get("sample"), "file": os.path.basename(self.file),
                 "measured": self.info.get("timestamp"),
                 "binding_events": self.qc["binding_events"]}
@@ -117,6 +120,7 @@ class BatchResult:
 
     @property
     def summary(self) -> pd.DataFrame:
+        """One row per peak for all samples (what summary.csv contains)."""
         if not self.samples:
             return pd.DataFrame()
         return pd.concat([s.summary_rows() for s in self.samples], ignore_index=True)
