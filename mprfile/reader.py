@@ -1,5 +1,5 @@
 """
-mprfile — read Refeyn mass-photometry .mpr files (AcquireMP / DiscoverMP) in Python.
+mprfile.reader — low-level access to Refeyn mass-photometry .mpr files (AcquireMP).
 
 Format notes (reverse-engineered from AcquireMP 2025.1.2 files, format_version 4):
   * A .mpr file is an ordinary HDF5 file with three top-level groups:
@@ -42,7 +42,7 @@ try:  # registers the Zstandard filter with HDF5
 except ImportError:  # pragma: no cover
     hdf5plugin = None
 
-__all__ = ["MPRFile", "Calibration", "load_events"]
+__all__ = ["MPRFile", "load_events"]
 
 
 # --------------------------------------------------------------------------- helpers
@@ -79,36 +79,6 @@ def _read_node(node: h5py.Group | h5py.Dataset) -> Any:
         else:
             out[k] = _read_node(node[k])
     return out
-
-
-# --------------------------------------------------------------------------- calibration
-class Calibration:
-    """Linear contrast -> mass calibration:  mass = slope * contrast + intercept."""
-
-    def __init__(self, slope: float, intercept: float = 0.0, unit: str = "kDa"):
-        self.slope, self.intercept, self.unit = float(slope), float(intercept), unit
-
-    @classmethod
-    def fit(cls, contrasts, masses, unit: str = "kDa") -> "Calibration":
-        """Least-squares fit from known (contrast, mass) pairs, e.g. peak
-        positions from `gaussian_fits()` and the known masses of your standard."""
-        c, m = np.asarray(contrasts, float), np.asarray(masses, float)
-        if len(c) < 2:
-            raise ValueError("need at least two calibration points")
-        slope, intercept = np.polyfit(c, m, 1)
-        cal = cls(slope, intercept, unit)
-        cal.r2 = 1 - np.sum((m - cal(c)) ** 2) / np.sum((m - m.mean()) ** 2)
-        return cal
-
-    def __call__(self, contrast):
-        return self.slope * np.asarray(contrast, float) + self.intercept
-
-    def inverse(self, mass):
-        return (np.asarray(mass, float) - self.intercept) / self.slope
-
-    def __repr__(self):
-        r2 = f", R²={self.r2:.5f}" if hasattr(self, "r2") else ""
-        return f"Calibration(mass = {self.slope:.6g}·contrast + {self.intercept:.6g} {self.unit}{r2})"
 
 
 # --------------------------------------------------------------------------- main class
@@ -306,7 +276,7 @@ class MPRFile:
         return self.h5["movie/autofocus_image"][:]
 
     # analysis -------------------------------------------------------------
-    def events(self, only_good: bool = True, calibration: Calibration | None = None) -> dict[str, np.ndarray]:
+    def events(self, only_good: bool = True, calibration=None) -> dict[str, np.ndarray]:
         """Fitted landing/unbinding events from AcquireMP's analysis.
         Keys: contrast, x, y (px), frame, time (s), fit_error, residual_error,
         nn_distance (px), id, good, selected (+ mass if a calibration is given

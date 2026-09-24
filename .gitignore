@@ -28,3 +28,7 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Analysis output
+results/
+results_*/
