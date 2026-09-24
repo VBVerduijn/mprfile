@@ -53,6 +53,12 @@ def _parser() -> argparse.ArgumentParser:
                    help="drop events with AcquireMP PSF fit error above this")
     g.add_argument("--background", action="store_true", help="fit a broad background under the peaks")
     g.add_argument("--plot-max", type=float, default=None, help="right edge of the histogram (kDa)")
+    g = p.add_argument_group("manual ROI mode (replaces the automatic peak search)")
+    g.add_argument("--roi", nargs=3, type=float, action="append", metavar=("LO", "HI", "K"),
+                   help="fit K Gaussians between LO and HI kDa; repeat for several ROIs. Each ROI is "
+                        "also fitted with 1..4 Gaussians and compared by BIC to flag overfitting")
+    g.add_argument("--bootstrap", type=int, default=0, help="bootstrap refits per ROI (stability check)")
+    g.add_argument("--no-roi-background", action="store_true", help="no flat background in ROIs")
     p.add_argument("--version", action="version", version=f"mprfile {__version__}")
     return p
 
@@ -62,7 +68,9 @@ def main(argv=None) -> int:
     st = AnalysisSettings(mass_range=tuple(a.mass_range), bin_width=a.bin_width,
                           min_fraction=a.min_fraction, min_counts=a.min_counts,
                           min_prominence=a.min_prominence, sigma_max=a.sigma_max,
-                          max_fit_error=a.max_fit_error, background=a.background, plot_max=a.plot_max)
+                          max_fit_error=a.max_fit_error, background=a.background, plot_max=a.plot_max,
+                          rois=[(lo, hi, int(k)) for lo, hi, k in a.roi] if a.roi else None,
+                          roi_background=not a.no_roi_background, bootstrap=a.bootstrap)
     try:
         analyze(a.samples, calibrant_file=a.calibrant_file, calibrant=a.calibrant,
                 calibration=a.calibration, out=a.out, settings=st, reports=not a.no_reports,

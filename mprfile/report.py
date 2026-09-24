@@ -191,11 +191,14 @@ def plot_sample(r):
         lo_lim = r.settings.mass_range[0]
         ax.axvspan(0, lo_lim, color="#000000", alpha=0.05, lw=0, label=f"below fit range (<{lo_lim:.0f} kDa)")
 
-        xx = np.linspace(r.fit.edges[0], min(r.fit.edges[-1], xmax), 3000)
-        for i, curve in enumerate(r.fit.peak_curves(xx)):  # fit and plot share the bin width
-            ax.plot(xx, curve, color=C_FIT, lw=1, label="Gaussian fits" if i == 0 else None)
-        if r.fit.background is not None:
-            ax.plot(xx, gauss(xx, *r.fit.background), color=C_FIT, lw=0.8, ls=":")
+        if r.rois:
+            _draw_rois(ax, r.rois, bw)
+        else:
+            xx = np.linspace(r.fit.edges[0], min(r.fit.edges[-1], xmax), 3000)
+            for i, curve in enumerate(r.fit.peak_curves(xx)):  # fit and plot share the bin width
+                ax.plot(xx, curve, color=C_FIT, lw=1, label="Gaussian fits" if i == 0 else None)
+            if r.fit.background is not None:
+                ax.plot(xx, gauss(xx, *r.fit.background), color=C_FIT, lw=0.8, ls=":")
         ytop = max(up.max() if len(up) else 1, 1)
         ax.set_ylim(-max(down.max() if len(down) else 1, ytop * 0.25) * 1.1, ytop * 1.28)
 
@@ -211,7 +214,8 @@ def plot_sample(r):
                         bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8))
         ax.set_xlim(0, xmax)
         ax.set(xlabel="Mass (kDa)", ylabel=f"Events per {bw:g} kDa",
-               title="Mass distribution (binding ↑, unbinding ↓)")
+               title="Mass distribution (binding ↑, unbinding ↓)"
+                     + ("  ·  manual ROI fit" if r.rois else ""))
         ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{abs(v):.0f}"))
         ax.legend(frameon=False, loc="upper right", fontsize=8)
 
@@ -220,7 +224,8 @@ def plot_sample(r):
         f0 = lambda v: f"{v:.0f}"
         y = _table(ax, r.peaks[["peak", "mass_kDa", "mass_err_kDa", "sigma_kDa", "counts", "percent"]],
                    ["#", "mass kDa", "± fit", "σ kDa", "events", "% *"],
-                   [str, f0, lambda v: f"{v:.1f}", f0, f0, lambda v: f"{v:.1f}"], title="Mass peaks",
+                   [str, f0, lambda v: f"{v:.1f}" if np.isfinite(v) else "—", f0, f0, lambda v: f"{v:.1f}"],
+                   title="Mass peaks",
                    widths=[0.08, 0.2, 0.15, 0.17, 0.2, 0.2], highlight=list(r.peaks["notes"].astype(bool)))
         q = r.qc
         y = _text_block(ax, [(f"* share of binding events in the fitted range "
@@ -238,6 +243,10 @@ def plot_sample(r):
              if r.calibration.mass_range else
              f"Calibration: mass = {r.calibration.slope:.1f} × contrast {r.calibration.intercept:+.2f} kDa", INK2),
         ], title="Quality control", wrap=62, y0=y - 0.04)
+        if r.rois:
+            risk_col = {"low": "#2e7d32", "moderate": "#222222", "high": C_CHECK}
+            y = _text_block(ax, [(f"[{x.risk} risk] {x.model_summary()}", risk_col[x.risk]) for x in r.rois],
+                            title="Model check (BIC, per ROI)", wrap=62, y0=y - 0.03)
         warn = [(f"⚠ {w}", C_CHECK) for w in (r.calibration.warnings + r.warnings)] \
             or [("✓ No warnings", "#2e7d32")]
         if len(warn) > 8:
@@ -246,8 +255,32 @@ def plot_sample(r):
         return fig
 
 
+def _draw_rois(ax, rois, bw):
+    """Shade ROIs and draw each mixture component (+ flat background) in events per bin."""
+    first = True
+    for roi in rois:
+        ax.axvspan(roi.lo, roi.hi, color=C_CHECK, alpha=0.06, lw=0)
+        ax.axvline(roi.lo, color=C_CHECK, lw=0.6, alpha=0.5)
+        ax.axvline(roi.hi, color=C_CHECK, lw=0.6, alpha=0.5)
+        xx = np.linspace(roi.lo, roi.hi, 800)
+        comps, bg = roi.fit.density(xx, bw, per_component=True)
+        for c in comps:
+            ax.plot(xx, c, color=C_FIT, lw=1, label="Gaussian fits" if first else None)
+            first = False
+        if bg is not None:
+            ax.plot(xx, bg, color=C_FIT, lw=0.8, ls=":", label="flat background" if roi is rois[0] else None)
+        ax.plot(xx, roi.fit.density(xx, bw), color=C_FIT, lw=0.6, alpha=0.5)
+        ax.text((roi.lo + roi.hi) / 2, 0.01, f"ROI: k={roi.k}", transform=ax.get_xaxis_transform(),
+                ha="center", va="bottom", fontsize=7.5, color=C_CHECK)
+
+
 # ---------------------------------------------------------------------------- output
 def write_reports(res, out) -> None:
+    with plt.ioff():
+        _write_reports(res, out)
+
+
+def _write_reports(res, out) -> None:
     out = Path(out)
     figs = []
     fig = plot_calibration(res.calibration)

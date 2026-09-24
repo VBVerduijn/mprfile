@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 
 from .calibration import Calibration, acquisition_info, calibrate, compare_acquisition
+from .mixture import ROIResult, fit_rois
 from .peaks import PeakFit, fit_peaks
 from .reader import MPRFile
 
@@ -49,6 +50,14 @@ class AnalysisSettings:
     background      fit one extra broad Gaussian under the peaks (for smeared samples).
     min_events      warn when a sample has fewer binding events than this.
     plot_max        (kDa) right edge of the histogram plot; None = automatic.
+
+    Manual ROI mode (replaces the automatic peak search when `rois` is set):
+    rois            list of (lo, hi, k): fit k Gaussians to the binding events in lo–hi kDa,
+                    e.g. [(400, 620, 2), (40, 160, 1)]. Every ROI is also fitted with
+                    1..roi_k_max Gaussians and compared by BIC; overfitting is flagged.
+    roi_background  include a flat background in each ROI (recommended).
+    roi_k_max       largest number of Gaussians tried for the model comparison.
+    bootstrap       number of bootstrap refits per ROI for stability checks (0 = off; ~100).
     """
     mass_range: tuple[float, float] = (40.0, 1500.0)
     bin_width: float = 5.0
@@ -61,6 +70,10 @@ class AnalysisSettings:
     background: bool = False
     min_events: int = 500
     plot_max: float | None = None
+    rois: list | None = None
+    roi_background: bool = True
+    roi_k_max: int = 4
+    bootstrap: int = 0
 
 
 @dataclass
@@ -74,6 +87,11 @@ class SampleResult:
     warnings: list[str]
     calibration: Calibration
     settings: AnalysisSettings
+    rois: list[ROIResult] | None = None     # manual ROI fits (None = automatic mode)
+
+    @property
+    def mode(self) -> str:
+        return "manual ROIs" if self.rois else "automatic"
 
     @property
     def name(self) -> str:
@@ -124,23 +142,31 @@ def analyze_sample(path, calibration: Calibration, settings: AnalysisSettings | 
         info["events_removed_by_fit_error"] = n0 - len(ev)
 
     binding = ev[ev.mass > 0]
-    fit = fit_peaks(binding.mass.values, st.mass_range[0], st.mass_range[1], st.bin_width,
-                    smooth_bins=st.smooth_bins, min_prominence=st.min_prominence,
-                    min_counts=st.min_counts, min_fraction=st.min_fraction,
-                    sigma_guess=max(3 * st.bin_width, 10.0), sigma_max=st.sigma_max,
-                    background=st.background)
-
-    peaks = fit.peaks.rename(columns={"position": "mass_kDa", "position_err": "mass_err_kDa",
-                                      "sigma": "sigma_kDa", "fraction": "fraction_in_range"})
-    peaks.insert(0, "peak", np.arange(1, len(peaks) + 1))
-    peaks["percent"] = 100 * peaks.pop("fraction_in_range")
-    peaks["notes"] = [_notes(p, calibration, st) for p in peaks.itertuples()]
+    n_range = int(((binding.mass >= st.mass_range[0]) & (binding.mass <= st.mass_range[1])).sum())
+    roi_results = None
+    if st.rois:
+        roi_results = fit_rois(binding.mass.values, st.rois, resolution=calibration.resolution_kDa,
+                               k_max=st.roi_k_max, background=st.roi_background, bootstrap=st.bootstrap)
+        peaks = roi_peaks_table(roi_results, n_range, calibration)
+        fit = PeakFit(pd.DataFrame(), np.array([0.0, 1.0]), np.array([0]), np.array([]), None, n_range,
+                      ["manual ROI mode"])
+    else:
+        fit = fit_peaks(binding.mass.values, st.mass_range[0], st.mass_range[1], st.bin_width,
+                        smooth_bins=st.smooth_bins, min_prominence=st.min_prominence,
+                        min_counts=st.min_counts, min_fraction=st.min_fraction,
+                        sigma_guess=max(3 * st.bin_width, 10.0), sigma_max=st.sigma_max,
+                        background=st.background)
+        peaks = fit.peaks.rename(columns={"position": "mass_kDa", "position_err": "mass_err_kDa",
+                                          "sigma": "sigma_kDa", "fraction": "fraction_in_range"})
+        peaks.insert(0, "peak", np.arange(1, len(peaks) + 1))
+        peaks["percent"] = 100 * peaks.pop("fraction_in_range")
+        peaks["notes"] = [_notes(p, calibration, st) for p in peaks.itertuples()]
 
     qc = {
         "events": int(len(ev)),
         "binding_events": int((ev.mass > 0).sum()),
         "unbinding_events": int((ev.mass < 0).sum()),
-        "binding_in_mass_range": int(fit.n_total),
+        "binding_in_mass_range": n_range,
         "assigned_to_peaks_pct": round(float(peaks.percent.sum()), 1) if len(peaks) else 0.0,
         "duration_s": round(duration, 1),
         "landing_rate_first_10s": round(float(((ev.mass > 0) & (ev.time < 10)).sum() / 10), 1),
@@ -148,21 +174,63 @@ def analyze_sample(path, calibration: Calibration, settings: AnalysisSettings | 
     if qc["binding_events"] < st.min_events:
         warnings.append(f"Only {qc['binding_events']} binding events (< {st.min_events}); "
                         "peak positions and percentages are less reliable")
-    for p in peaks.itertuples():
-        if p.notes:
-            warnings.append(f"Peak {p.peak} ({p.mass_kDa:.0f} kDa): {p.notes}")
-    warnings += fit.notes
-    return SampleResult(os.fspath(path), info, ev, peaks, fit, qc, warnings, calibration, st)
+    if roi_results:
+        for r in roi_results:
+            warnings += [f"ROI {r.label}: {w}" for w in r.warnings]
+        for p in peaks.itertuples():
+            rng_note = _range_note(p.mass_kDa, calibration)
+            if rng_note:
+                warnings.append(f"Peak {p.peak} ({p.mass_kDa:.0f} kDa): {rng_note}")
+    else:
+        for p in peaks.itertuples():
+            if p.notes:
+                warnings.append(f"Peak {p.peak} ({p.mass_kDa:.0f} kDa): {p.notes}")
+        warnings += fit.notes
+    return SampleResult(os.fspath(path), info, ev, peaks, fit, qc, warnings, calibration, st, roi_results)
+
+
+def roi_peaks_table(roi_results: list[ROIResult], n_range: int, cal: Calibration) -> pd.DataFrame:
+    """Peak table (same columns as automatic mode) from manual ROI fits, with per-peak notes
+    taken from the ROI diagnostics."""
+    rows = []
+    for r in roi_results:
+        f = r.fit
+        for i in range(f.k):
+            tag = f"component at {f.mu[i]:.0f} kDa"
+            notes = [w.split(": ", 1)[1] for w in r.warnings if w.startswith(tag)]
+            notes += [w for w in r.warnings if w.startswith(("OVERFITTING", "UNDERFITTING"))]
+            notes += [w for w in r.warnings if "not resolved" in w and f"{f.mu[i]:.0f} " in w + " "]
+            rn = _range_note(f.mu[i], cal)
+            if rn:
+                notes.insert(0, rn)
+            row = {"mass_kDa": f.mu[i],
+                   "mass_err_kDa": f.mu_err[i] if f.mu_err is not None else np.nan,
+                   "sigma_kDa": f.sigma[i], "counts": f.counts[i],
+                   "percent": 100 * f.counts[i] / max(n_range, 1),
+                   "roi": r.label, "roi_k": r.k, "roi_bic_best_k": r.bic_best_k, "roi_risk": r.risk,
+                   "notes": "; ".join(dict.fromkeys(notes))}
+            if r.bootstrap is not None:
+                row["mass_sd_bootstrap"] = r.bootstrap.mass_sd.values[i]
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    if len(df):
+        df = df.sort_values("mass_kDa", ignore_index=True)
+        df.insert(0, "peak", np.arange(1, len(df) + 1))
+    return df
+
+
+def _range_note(mass: float, cal: Calibration) -> str:
+    rng = cal.mass_range
+    if rng:
+        if mass < 0.9 * rng[0]:
+            return f"below calibrated range ({rng[0]:.0f}–{rng[1]:.0f} kDa)"
+        if mass > 1.1 * rng[1]:
+            return f"above calibrated range ({rng[0]:.0f}–{rng[1]:.0f} kDa), extrapolated"
+    return ""
 
 
 def _notes(p, cal: Calibration, st: AnalysisSettings) -> str:
-    out = []
-    rng = cal.mass_range
-    if rng:
-        if p.mass_kDa < 0.9 * rng[0]:
-            out.append(f"below calibrated range ({rng[0]:.0f}–{rng[1]:.0f} kDa)")
-        elif p.mass_kDa > 1.1 * rng[1]:
-            out.append(f"above calibrated range ({rng[0]:.0f}–{rng[1]:.0f} kDa), extrapolated")
+    out = [n for n in [_range_note(p.mass_kDa, cal)] if n]
     if p.sigma_kDa >= 0.98 * st.sigma_max:
         out.append(f"width hit the limit (σ = {st.sigma_max:.0f} kDa): not a single clean peak, "
                    "mass and % are approximate")
@@ -279,21 +347,73 @@ def write_results(res: BatchResult, out, reports: bool = True) -> None:
         cal.validation.to_csv(out / "calibration" / "ladder_check.csv", index=False)
 
     for r in res.samples:
-        d = out / r.name
-        d.mkdir(exist_ok=True)
-        r.peaks.to_csv(d / "peaks.csv", index=False)
-        r.events.to_csv(d / "events.csv", index=False)
-        pd.Series({**r.qc, **{k: v for k, v in r.info.items() if k in
-                   ("sample", "buffer", "bufferpH", "timestamp", "comments")}}).to_csv(
-            d / "info.csv", header=["value"])
-        if r.warnings:
-            (d / "warnings.txt").write_text("\n".join(r.warnings) + "\n", encoding="utf-8")
+        write_sample(r, out, reports=False)
     if res.samples:
         res.summary.to_csv(out / "summary.csv", index=False)
-    pd.Series({k: (str(v) if isinstance(v, tuple) else v) for k, v in
+    pd.Series({k: (str(v) if isinstance(v, (tuple, list)) else v) for k, v in
                asdict(res.samples[0].settings if res.samples else AnalysisSettings()).items()}
               ).to_csv(out / "settings_used.csv", header=["value"])
 
     if reports:
         from .report import write_reports
         write_reports(res, out)
+
+
+def write_sample(r: SampleResult, out, reports: bool = True) -> Path:
+    """Write one sample's CSVs (and report) to out/<sample>/."""
+    d = Path(out) / r.name
+    d.mkdir(parents=True, exist_ok=True)
+    r.peaks.to_csv(d / "peaks.csv", index=False)
+    r.events.to_csv(d / "events.csv", index=False)
+    pd.Series({**r.qc, **{k: v for k, v in r.info.items() if k in
+               ("sample", "buffer", "bufferpH", "timestamp", "comments")}}).to_csv(
+        d / "info.csv", header=["value"])
+    wfile = d / "warnings.txt"
+    if r.warnings:
+        wfile.write_text("\n".join(r.warnings) + "\n", encoding="utf-8")
+    elif wfile.exists():
+        wfile.unlink()
+    for f in ("rois.json", "roi_model_comparison.csv"):
+        if not r.rois and (d / f).exists():
+            (d / f).unlink()
+    if r.rois:
+        write_roi_files(r.rois, d)
+    if reports:
+        import matplotlib.pyplot as plt
+        from .report import plot_sample
+        with plt.ioff():
+            fig = plot_sample(r)
+        fig.savefig(d / "report.pdf")
+        fig.savefig(d / "report.png", dpi=130)
+        plt.close(fig)
+    return d
+
+
+def update_summary(r: SampleResult, out) -> None:
+    """Replace this sample's rows in out/summary.csv (or create it)."""
+    f = Path(out) / "summary.csv"
+    new = r.summary_rows()
+    if f.exists():
+        old = pd.read_csv(f)
+        old = old[old["file"] != os.path.basename(r.file)]
+        new = pd.concat([old, new], ignore_index=True)
+    new.to_csv(f, index=False)
+
+
+def write_roi_files(rois: list[ROIResult], folder) -> None:
+    """Model comparison tables and a reproducible ROI definition."""
+    import json
+    folder = Path(folder)
+    tabs = []
+    for r in rois:
+        t = r.models.copy()
+        t.insert(0, "roi", r.label)
+        t["chosen"] = t.k == r.k
+        tabs.append(t)
+    pd.concat(tabs, ignore_index=True).to_csv(folder / "roi_model_comparison.csv", index=False)
+    spec = {"rois": [list(r.spec()) for r in rois], "background": rois[0].background,
+            "model_check": [r.model_summary() for r in rois],
+            "risk": {r.label: r.risk for r in rois},
+            "warnings": {r.label: r.warnings for r in rois},
+            "reproduce": "AnalysisSettings(rois=" + repr([r.spec() for r in rois]) + ")"}
+    (folder / "rois.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")

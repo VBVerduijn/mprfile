@@ -12,7 +12,8 @@
 # bound (next major version, not yet tested), so the solver can't pull in abandoned
 # old releases or untested new major releases. Tested set (Sept 2026, Python 3.11):
 #   numpy 2.4.6, h5py 3.16.0, hdf5plugin 7.1.0, pandas 3.0.6, scipy 1.17.1,
-#   matplotlib 3.11.2, tifffile 2026.3.3, jupyterlab 4.6.4, ipykernel 7.x, ipywidgets 8.1.9
+#   matplotlib 3.11.2, tifffile 2026.3.3, jupyterlab 4.6.4, ipykernel 7.x, ipywidgets 8.1.9,
+#   ipympl 0.10.0 (oldest tested: numpy 1.26, h5py 3.10, pandas 2.1, scipy 1.11, mpl 3.8, ipympl 0.9.3)
 name: mpr
 channels:
   - conda-forge
@@ -28,7 +29,9 @@ dependencies:
   - tifffile >=2023.9.26,<2027   # TIFF export for ImageJ / Fiji (calendar versioning)
   - jupyterlab >=4.0,<5
   - ipykernel >=6.25,<8
-  - ipywidgets >=8.1,<9          # interactive frame slider in the tutorial
+  - ipywidgets >=8.1,<9          # interactive widgets (frame slider, ROI fitter)
+  - ipympl >=0.9.3,<1            # draw ROIs with the mouse (%matplotlib widget)
+  - nbstripout >=0.6,<1          # keeps notebook outputs (measurement data) out of git
   - pip >=23,<27
   - pip:
-      - -e .              # installs mprfile.py from this folder (editable)
+      - -e .              # installs the mprfile package from this folder (editable)

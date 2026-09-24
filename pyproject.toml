@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mprfile"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read and analyse Refeyn mass photometry .mpr files (AcquireMP) in Python"
 readme = "README.md"
 license = "MIT"
@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 tiff = ["tifffile>=2023.9.26,<2027"]
-notebooks = ["jupyterlab>=4.0,<5", "ipykernel>=6.25,<8", "ipywidgets>=8.1,<9"]
+notebooks = ["jupyterlab>=4.0,<5", "ipykernel>=6.25,<8", "ipywidgets>=8.1,<9", "ipympl>=0.9.3,<1"]
 
 [project.scripts]
 mpr-analyze = "mprfile.cli:main"

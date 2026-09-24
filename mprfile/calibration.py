@@ -102,6 +102,14 @@ class Calibration:
                 ms += list(df.loc[ok, "known_mass"])
         return (min(ms), max(ms)) if ms else None
 
+    @property
+    def resolution_kDa(self) -> float | None:
+        """Typical width (σ, kDa) of a single species: median width of the calibrant peaks.
+        Used to flag fitted components that are implausibly narrow."""
+        if self.peaks is not None and "sigma_kDa" in self.peaks and len(self.peaks):
+            return float(np.median(self.peaks["sigma_kDa"]))
+        return None
+
     def __repr__(self):
         r2 = f", R²={self.r2:.5f}" if self.r2 is not None else ""
         name = f" [{self.calibrant}]" if self.calibrant else ""
@@ -228,7 +236,8 @@ def calibrate(source, calibrant="MassFerence P1", *, contrast_range=(0.0008, 0.0
     cal.peaks = pd.DataFrame({
         "known_mass": known, "contrast": contrast, "contrast_err": pf.peaks.position_err.values[ip],
         "counts": pn[ip], "fitted_mass": fitted, "error_kDa": fitted - known,
-        "error_pct": 100 * (fitted - known) / known, "used": True})
+        "error_pct": 100 * (fitted - known) / known, "used": True,
+        "sigma_kDa": pf.peaks.sigma.values[ip] * abs(cal.slope)})
 
     # extra ladder peaks: independent check of linearity beyond the certified peaks
     if unit_mass:

@@ -1,0 +1,4 @@
+# Strip notebook outputs on commit (they contain measurement data).
+# Activate once per clone, inside the conda env:  nbstripout --install
+*.ipynb filter=nbstripout
+*.ipynb diff=ipynb
