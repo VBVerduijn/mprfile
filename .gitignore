@@ -1,0 +1,30 @@
+# --- Measurement data: never commit (unpublished data, personal info, instrument serials)
+*.mpr
+*.mp
+*.h5
+*.hdf5
+*.tif
+*.tiff
+*.csv
+exports/
+
+# Figures/notebooks generated from real data
+*_overview.png
+*_with_outputs.ipynb
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

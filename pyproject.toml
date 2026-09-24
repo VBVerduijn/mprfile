@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mprfile"
+version = "0.1.0"
+description = "Read Refeyn mass photometry .mpr files (AcquireMP) in Python"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Victor Bernhard Verduijn" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "numpy>=1.26,<3",
+    "h5py>=3.10,<4",
+    "hdf5plugin>=4.4,<8",
+]
+
+[project.optional-dependencies]
+extras = [
+    "pandas>=2.1,<4",
+    "scipy>=1.11,<2",
+    "matplotlib>=3.8,<4",
+    "tifffile>=2023.9.26,<2027",
+]
+
+[tool.setuptools]
+py-modules = ["mprfile"]
