@@ -95,7 +95,12 @@ with MPRFile("002_Ladder.mpr") as m:
     m.gaussian_fits(); m.scores()
     m.export_movie_tiff("movie.tif", ratiometric=True)   # for Fiji (needs tifffile)
 ```
-`mpr_tutorial.ipynb` walks through the file contents and further analyses: the movies, your own peak fitting, ladder linearity, landing kinetics, drift and the average PSF.
+`mpr_tutorial.ipynb` demonstrates every function on a real calibrant and sample:
+- **The file:** metadata, raw and ratiometric movies, AcquireMP's events, and the stored fits.
+- **Calibration:** your own peak fitting, ladder linearity, other calibrants, self-checks, and saving and reusing a calibration.
+- **Analysis:** sample analysis and its settings, ROI fitting with the overfitting statistics (including a k = 1/2/4 comparison and bootstrap), batch processing and the command line, and exports.
+- **Interactive:** the ROI tool, both by mouse and in code.
+- **Extras:** landing kinetics, drift, and the average PSF.
 
 ### Adding a calibrant
 Calibrants live in `mprfile/calibration.py` (`CALIBRANTS`). Add a name, its certified masses and, for an oligomer ladder, `unit_mass`. Or just pass the masses.

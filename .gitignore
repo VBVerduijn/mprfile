@@ -32,3 +32,6 @@ desktop.ini
 # Analysis output
 results/
 results_*/
+
+# Tutorial outputs
+my_calibration.json
